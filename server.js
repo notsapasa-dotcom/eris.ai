@@ -15,6 +15,75 @@ const openai = new OpenAI({
 app.use(express.json());
 app.use(express.static('.'));  // Serve static files from current directory
 
+// Archetypal Commentary Function
+async function getArchetypalCommentary(text, archetypes) {
+  try {
+    const prompt = `You are channeling multiple character archetypes to provide commentary on this text: "${text}"
+
+For each of the following characters, provide exactly 2-3 sentences of commentary in their distinctive voice and perspective. Stay true to their personality, speech patterns, and worldview:
+
+Characters: ${archetypes.join(', ')}
+
+Respond with a JSON object where each character name is a key and their commentary is the value:
+
+{
+  "Character Name": "2-3 sentences in their voice commenting on the text",
+  ...
+}
+
+Examples of character voices:
+- Rick Sanchez: Cynical, scientific, burps, interdimensional references, rates things
+- Elle Woods: Bubbly, fashion-conscious, surprisingly insightful, positive
+- Donald Trump: Superlative language, self-referential, "tremendous," "beautiful"
+
+Respond only with the JSON object.`;
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo",
+      messages: [
+        {
+          role: "system",
+          content: "You are a master character impersonator who can channel any fictional or real personality with perfect accuracy. You understand speech patterns, worldviews, and distinctive traits of characters. Always respond with valid JSON."
+        },
+        {
+          role: "user",
+          content: prompt
+        }
+      ],
+      temperature: 0.9,
+      max_tokens: 500
+    });
+
+    const response = completion.choices[0].message.content.trim();
+    
+    // Parse the JSON response
+    let parsedResponse;
+    try {
+      parsedResponse = JSON.parse(response);
+    } catch (parseError) {
+      console.error('Failed to parse archetypal commentary as JSON:', response);
+      // Fallback response
+      const fallback = {};
+      archetypes.forEach(archetype => {
+        fallback[archetype] = `Interesting perspective on this text. Each character would have their own unique take on these words.`;
+      });
+      parsedResponse = fallback;
+    }
+
+    return parsedResponse;
+
+  } catch (error) {
+    console.error('OpenAI API error for archetypal commentary:', error);
+    
+    // Fallback response for API errors
+    const fallback = {};
+    archetypes.forEach(archetype => {
+      fallback[archetype] = `${archetype} would have something insightful to say about this text.`;
+    });
+    return fallback;
+  }
+}
+
 // AI Analysis Function
 async function analyzePoetry(text) {
   try {
@@ -110,6 +179,44 @@ app.post('/api/analyze', async (req, res) => {
   } catch (error) {
     console.error('Analysis error:', error);
     res.status(500).json({ error: 'Analysis failed' });
+  }
+});
+
+// Archetypes endpoint
+app.get('/api/archetypes', (req, res) => {
+  const defaultArchetypes = [
+    "Rick Sanchez",
+    "Elle Woods", 
+    "Donald Trump"
+  ];
+  
+  res.json(defaultArchetypes);
+});
+
+// Archetypal commentary endpoint
+app.post('/api/archetypal-commentary', async (req, res) => {
+  try {
+    const { text, archetypes } = req.body;
+    
+    if (!text || text.trim().length < 3) {
+      return res.status(400).json({ error: 'Text too short' });
+    }
+    
+    if (!archetypes || !Array.isArray(archetypes) || archetypes.length === 0) {
+      return res.status(400).json({ error: 'Archetypes array required' });
+    }
+
+    // Log for debugging
+    console.log(`Getting archetypal commentary for: "${text}"`);
+    console.log(`Archetypes: ${archetypes.join(', ')}`);
+    
+    const commentary = await getArchetypalCommentary(text, archetypes);
+    
+    res.json(commentary);
+    
+  } catch (error) {
+    console.error('Archetypal commentary error:', error);
+    res.status(500).json({ error: 'Commentary failed' });
   }
 });
 

@@ -93,6 +93,57 @@
             opacity: 0.6;
             font-style: italic;
         }
+
+        /* Archetypal Commentary Styles */
+        .message {
+            position: relative;
+            margin: 15px 0;
+            padding: 15px;
+            border-bottom: 1px solid #eee;
+            border-radius: 8px;
+            transition: all 0.4s ease;
+            cursor: pointer;
+            overflow: hidden;
+        }
+        
+        .message:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            background: rgba(250, 250, 250, 0.8);
+        }
+
+        .message.show-commentary .archetypal-commentary {
+            display: block;
+        }
+
+
+
+        .archetypal-commentary {
+            margin-top: 15px;
+            padding: 15px;
+            background: #f8f8f8;
+            border-radius: 8px;
+            border-left: 3px solid #666;
+            display: none;
+        }
+
+        .archetype-comment {
+            margin-bottom: 12px;
+            padding: 8px;
+            background: white;
+            border-radius: 4px;
+        }
+
+        .archetype-name {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 4px;
+        }
+
+        .archetype-text {
+            font-style: italic;
+            color: #555;
+        }
     </style>
 </head>
 <body>
@@ -213,14 +264,16 @@
                 // Remove any loading messages first
                 this.output.innerHTML = this.output.innerHTML.replace(/<div class="loading">.*?<\/div>/g, '');
                 
+                const messageId = Date.now(); // Unique ID for each message
                 const messageHtml = `
-                    <div style="margin-bottom: 30px; padding-bottom: 20px; border-bottom: 1px solid #eee;">
+                    <div class="message" data-message-id="${messageId}" data-original-text="${inputText.replace(/"/g, '&quot;')}" onclick="window.erisApp.toggleArchetypalCommentary(${messageId})">
                         <div style="font-size: 0.9em; color: #666; margin-bottom: 10px;">"${inputText}"</div>
                         <div><strong>Oooh, it's giving ${data.voice}</strong></div>
                         <div style="margin: 15px 0; padding: 15px; background: white; border-left: 3px solid #333;">
                             ${data.poem}
                         </div>
                         <div style="font-size: 0.9em; opacity: 0.8;">${data.analysis}</div>
+                        <div id="archetypal-${messageId}" class="archetypal-commentary" style="display: none;"></div>
                     </div>
                 `;
                 
@@ -255,10 +308,76 @@
                     this.view.showError(error.message);
                 }
             }
+
+            async toggleArchetypalCommentary(messageId) {
+                const messageDiv = document.querySelector(`[data-message-id="${messageId}"]`);
+                const commentaryDiv = document.getElementById(`archetypal-${messageId}`);
+                
+                if (!messageDiv || !commentaryDiv) return;
+                
+                const isShowing = messageDiv.classList.contains('show-commentary');
+                
+                if (isShowing) {
+                    // Hide commentary
+                    messageDiv.classList.remove('show-commentary');
+                    commentaryDiv.style.display = 'none';
+                } else {
+                    // Show commentary (load if needed)
+                    messageDiv.classList.add('show-commentary');
+                    commentaryDiv.style.display = 'block';
+                    
+                    // Load commentary if not already loaded
+                    if (commentaryDiv.innerHTML.trim() === '') {
+                        await this.loadArchetypalCommentary(messageId, commentaryDiv, messageDiv);
+                    }
+                }
+            }
+
+            async loadArchetypalCommentary(messageId, commentaryDiv, messageDiv) {
+                try {
+                    const originalText = messageDiv.getAttribute('data-original-text');
+                    
+                    // Show loading state
+                    commentaryDiv.innerHTML = '<div style="text-align: center; padding: 10px;">🎭 Channeling archetypes...</div>';
+                    
+                    // Get archetypes
+                    const archetypesResponse = await fetch('/api/archetypes');
+                    const archetypes = await archetypesResponse.json();
+                    
+                    // Get commentary
+                    const response = await fetch('/api/archetypal-commentary', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ text: originalText, archetypes })
+                    });
+                    
+                    const commentary = await response.json();
+                    
+                    // Display results
+                    let html = '<div style="font-weight: bold; margin-bottom: 10px; color: #333;">🎭 Archetypal Commentary:</div>';
+                    
+                    for (const [archetype, comment] of Object.entries(commentary)) {
+                        html += `
+                            <div class="archetype-comment">
+                                <div class="archetype-name">${archetype}:</div>
+                                <div class="archetype-text">"${comment}"</div>
+                            </div>`;
+                    }
+                    
+                    commentaryDiv.innerHTML = html;
+                    
+                } catch (error) {
+                    console.error('Archetypal commentary error:', error);
+                    commentaryDiv.innerHTML = '<div style="color: red; padding: 10px;">Failed to load archetypal commentary</div>';
+                }
+            }
         }
 
         // Initialize
         const app = new ErisController();
+        
+        // Make app globally accessible for onclick handlers
+        window.erisApp = app;
     </script>
 </body>
 </html>
