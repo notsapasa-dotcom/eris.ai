@@ -10,8 +10,8 @@ A mystical AI poetry analysis app where Eris, an ancient oracle, analyzes your p
    ```
 
 2. **Add your OpenAI API key**
-   - Open `.env` file
-   - Replace `your-openai-api-key-here` with your actual OpenAI API key
+   - Make a `.env` file at root of project
+   - create a line `OPENAI_API_KEY=your-openai-api-key-here` with your actual OpenAI API key
 
 3. **Start the server**
    ```bash
