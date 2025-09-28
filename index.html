@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Eris v0.01</title>
+    <style>
+        /* Simple clinical white theme */
+        body {
+            font-family: Georgia, serif;
+            margin: 0;
+            padding: 0;
+            background: white;
+            color: #333;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0;
+            min-height: 100vh;
+        }
+
+        .input-section {
+            padding: 0px;
+            border-right: 0px solid #eee;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        .input-section h1 {
+            margin: 0 0 20px 0;
+            font-weight: normal;
+        }
+
+        .textarea-container {
+            position: relative;
+            width: 100%;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        textarea {
+            width: 100%;
+            flex: 1;
+            padding: 20px;
+            border: 0px solid #ddd;
+            font-family: inherit;
+            font-size: 16px;
+            line-height: 1.6;
+            resize: none;
+            min-height: 200px;
+            box-sizing: border-box;
+        }
+
+        .loading-indicator {
+            position: absolute;
+            bottom: 10px;
+            right: 20px;
+            background: rgba(51, 51, 51, 0.9);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-style: italic;
+            opacity: 0;
+            transform: translateY(10px);
+            transition: all 0.3s ease;
+            pointer-events: none;
+        }
+
+        .loading-indicator.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .loading-indicator.hidden {
+            display: none;
+        }
+
+        .response {
+            padding: 20px;
+            background: #fafafa;
+            height: 100vh;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        .loading {
+            opacity: 0.6;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <!-- VIEW -->
+    <div class="input-section">
+        <div class="textarea-container">
+            <textarea id="poem" placeholder="Write your poem here..."></textarea>
+            <div id="loading-indicator" class="loading-indicator hidden">✨ Eris is sensing...</div>
+        </div>
+    </div>
+
+    <div class="response">
+        <div id="output">Select some text and click analyze...</div>
+    </div>
+
+    <script>
+        // MODEL
+        class ErisModel {
+            constructor() {
+                this.messages = []; // Simple storage
+            }
+
+            async analyze(text) {
+                // Real API call would go here
+                const response = await fetch('/api/analyze', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text })
+                });
+                
+                const result = await response.json();
+                
+                // Store message
+                this.messages.push({
+                    input: text,
+                    output: result,
+                    timestamp: Date.now()
+                });
+                
+                return result;
+            }
+        }
+
+        // VIEW
+        class ErisView {
+            constructor(controller) {
+                this.controller = controller;
+                this.poem = document.getElementById('poem');
+                this.output = document.getElementById('output');
+                this.loadingIndicator = document.getElementById('loading-indicator');
+                this.autoAnalyzeTimeout = null;
+                
+                this.setupEvents();
+            }
+
+            setupEvents() {
+                // Check for text selection
+                this.poem.addEventListener('mouseup', () => this.checkSelection());
+                this.poem.addEventListener('keyup', () => this.checkSelection());
+                this.poem.addEventListener('selectstart', () => this.hideLoadingIndicator());
+            }
+
+            checkSelection() {
+                const selected = window.getSelection().toString().trim();
+                
+                // Clear any existing timeout
+                if (this.autoAnalyzeTimeout) {
+                    clearTimeout(this.autoAnalyzeTimeout);
+                    this.hideLoadingIndicator();
+                }
+                
+                if (selected && selected.length > 3) {
+                    // Show loading indicator immediately
+                    this.showLoadingIndicator();
+                    
+                    // Auto-analyze after selection with a short delay
+                    this.autoAnalyzeTimeout = setTimeout(() => {
+                        this.controller.analyze();
+                    }, 600); // Reduced to 600ms since we now show loading
+                } else {
+                    this.hideLoadingIndicator();
+                }
+            }
+
+            showLoadingIndicator() {
+                this.loadingIndicator.classList.remove('hidden');
+                // Force reflow then add show class for animation
+                this.loadingIndicator.offsetHeight;
+                this.loadingIndicator.classList.add('show');
+            }
+
+            hideLoadingIndicator() {
+                this.loadingIndicator.classList.remove('show');
+                setTimeout(() => {
+                    this.loadingIndicator.classList.add('hidden');
+                }, 300); // Match transition duration
+            }
+
+            getSelectedText() {
+                return window.getSelection().toString().trim();
+            }
+
+            showLoading() {
+                // Hide the textarea loading indicator since we're now processing
+                this.hideLoadingIndicator();
+                
+                // Remove any existing loading messages first
+                this.output.innerHTML = this.output.innerHTML.replace(/<div class="loading">.*?<\/div>/g, '');
+                
+                if (this.output.innerHTML.includes('Select some text') || this.output.innerHTML.trim() === '') {
+                    this.output.innerHTML = '<div class="loading">🔮 Eris is channeling the poets...</div>';
+                } else {
+                    this.output.innerHTML = '<div class="loading">🔮 Eris is channeling the poets...</div>' + this.output.innerHTML;
+                }
+            }
+
+            showResponse(data, inputText) {
+                // Remove any loading messages first
+                this.output.innerHTML = this.output.innerHTML.replace(/<div class="loading">.*?<\/div>/g, '');
+                
+                const messageHtml = `
+                    <div style="margin-bottom: 30px; padding-bottom: 20px; border-bottom: 1px solid #eee;">
+                        <div style="font-size: 0.9em; color: #666; margin-bottom: 10px;">"${inputText}"</div>
+                        <div><strong>Oooh, it's giving ${data.voice}</strong></div>
+                        <div style="margin: 15px 0; padding: 15px; background: white; border-left: 3px solid #333;">
+                            ${data.poem}
+                        </div>
+                        <div style="font-size: 0.9em; opacity: 0.8;">${data.analysis}</div>
+                    </div>
+                `;
+                
+                if (this.output.innerHTML.includes('Select some text') || this.output.innerHTML.trim() === '') {
+                    this.output.innerHTML = messageHtml;
+                } else {
+                    this.output.innerHTML = messageHtml + this.output.innerHTML;
+                }
+            }
+
+            showError(error) {
+                this.output.innerHTML = `<div style="color: red;">Error: ${error}</div>`;
+            }
+        }
+
+        // CONTROLLER
+        class ErisController {
+            constructor() {
+                this.model = new ErisModel();
+                this.view = new ErisView(this);
+            }
+
+            async analyze() {
+                const selectedText = this.view.getSelectedText();
+                if (!selectedText) return;
+
+                try {
+                    this.view.showLoading();
+                    const result = await this.model.analyze(selectedText);
+                    this.view.showResponse(result, selectedText);
+                } catch (error) {
+                    this.view.showError(error.message);
+                }
+            }
+        }
+
+        // Initialize
+        const app = new ErisController();
+    </script>
+</body>
+</html>
