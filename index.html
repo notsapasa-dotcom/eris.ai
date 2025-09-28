@@ -132,6 +132,74 @@
             padding: 8px;
             background: white;
             border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 1px solid transparent;
+        }
+
+        .archetype-comment:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+            background: #f9f9f9;
+            border: 1px solid #ddd;
+        }
+
+        .archetype-comment:hover .archetype-name {
+            color: #555;
+        }
+
+        .archetype-comment:active {
+            transform: translateY(0);
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .archetype-edit {
+            width: 100%;
+            padding: 8px;
+            border: 2px solid #666;
+            border-radius: 4px;
+            background: white;
+            font-size: 12px;
+            font-weight: bold;
+            color: #333;
+            outline: none;
+        }
+
+        .archetype-edit:focus {
+            border-color: #333;
+            box-shadow: 0 0 0 2px rgba(51, 51, 51, 0.1);
+        }
+
+        .archetype-edit-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(248, 248, 248, 0.95);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            border: 2px solid #666;
+        }
+
+        .archetype-edit-input {
+            padding: 8px 12px;
+            border: 2px solid #333;
+            border-radius: 4px;
+            background: white;
+            font-size: 12px;
+            font-weight: bold;
+            color: #333;
+            outline: none;
+            min-width: 150px;
+            text-align: center;
+        }
+
+        .archetype-edit-input:focus {
+            border-color: #555;
+            box-shadow: 0 0 0 2px rgba(51, 51, 51, 0.2);
         }
 
         .archetype-name {
@@ -150,7 +218,26 @@
     <!-- VIEW -->
     <div class="input-section">
         <div class="textarea-container">
-            <textarea id="poem" placeholder="Write your poem here..."></textarea>
+            <textarea id="poem" placeholder="Write your poem here...">
+Love is a base frequency—light and dark dance around love.  
+Heaven's order and hell's chaos in eternal dance around love.  
+The divine worship love.  
+The divine dote on mortality but weep for humanity.  
+
+The angels fall not out of disobedience  
+but love for mortal women.  
+"It's the way her voice sounds when she says goodbye," confesses one fallen.  
+"It's the way her eyes sparkle when she denies," admits another.  
+
+My time in heaven taught me  
+it was not man that worshipped gods  
+but gods that worshipped man—  
+and such could never be uttered, but all knew.  
+
+If given the chance, we would walk amongst mortal kind,  
+but God had contained us:  
+"They are corrupt, my children. Stay away from them."  
+And yet, curious as ever, we peered from heaven and gasped.</textarea>
             <div id="loading-indicator" class="loading-indicator hidden">✨ Eris is sensing...</div>
         </div>
     </div>
@@ -340,15 +427,11 @@
                     // Show loading state
                     commentaryDiv.innerHTML = '<div style="text-align: center; padding: 10px;">🎭 Channeling archetypes...</div>';
                     
-                    // Get archetypes
-                    const archetypesResponse = await fetch('/api/archetypes');
-                    const archetypes = await archetypesResponse.json();
-                    
-                    // Get commentary
+                    // Get commentary (server will use its stored archetypes)
                     const response = await fetch('/api/archetypal-commentary', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ text: originalText, archetypes })
+                        body: JSON.stringify({ text: originalText })
                     });
                     
                     const commentary = await response.json();
@@ -358,7 +441,7 @@
                     
                     for (const [archetype, comment] of Object.entries(commentary)) {
                         html += `
-                            <div class="archetype-comment">
+                            <div class="archetype-comment" onclick="window.erisApp.toggleArchetypeEdit(this, '${archetype}', '${messageId}')">
                                 <div class="archetype-name">${archetype}:</div>
                                 <div class="archetype-text">"${comment}"</div>
                             </div>`;
@@ -371,13 +454,256 @@
                     commentaryDiv.innerHTML = '<div style="color: red; padding: 10px;">Failed to load archetypal commentary</div>';
                 }
             }
+
+            toggleArchetypeEdit(commentElement, currentArchetype, messageId) {
+                // Prevent event bubbling to message click
+                event.stopPropagation();
+                
+                console.log('toggleArchetypeEdit called:', currentArchetype, messageId);
+                
+                // Check if overlay is already visible - if so, hide it
+                const existingOverlay = commentElement.querySelector('.archetype-edit-overlay');
+                if (existingOverlay) {
+                    console.log('Overlay already visible, hiding it');
+                    this.removeEditOverlay(commentElement);
+                    return;
+                }
+                
+                // Show the edit overlay
+                console.log('Showing edit overlay');
+                const textDiv = commentElement.querySelector('.archetype-text');
+                const originalCommentary = textDiv.textContent.replace(/"/g, '').trim();
+                console.log('Original commentary:', originalCommentary);
+                
+                // Create overlay div
+                const overlay = document.createElement('div');
+                overlay.className = 'archetype-edit-overlay';
+                overlay.style.backgroundColor = 'rgba(255, 255, 255, 0.95)'; // White background
+                console.log('Creating overlay element');
+                
+                // Create centered input
+                const input = document.createElement('input');
+                input.className = 'archetype-edit-input';
+                input.value = currentArchetype;
+                input.style.border = '2px solid #999'; // Soft gray border
+                console.log('Creating input element with value:', currentArchetype);
+                
+                // Store reference to 'this' for event handlers
+                const self = this;
+                
+                // Handle input events - using both keypress and keydown for compatibility
+                const handleKey = function(e) {
+                    console.log('Key event:', e.type, 'Key:', e.key, 'Input value:', input.value);
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        const newValue = input.value.trim();
+                        console.log('Enter pressed. Current:', currentArchetype, 'New:', newValue);
+                        if (newValue !== currentArchetype && newValue !== '') {
+                            // Only call API if value actually changed
+                            console.log('Calling saveArchetype with:', newValue);
+                            self.saveArchetype(newValue, commentElement, currentArchetype, originalCommentary, messageId);
+                        } else {
+                            // Just remove overlay if no change
+                            console.log('No change or empty value, removing overlay');
+                            self.removeEditOverlay(commentElement);
+                        }
+                    } else if (e.key === 'Escape') {
+                        console.log('Escape pressed, removing overlay');
+                        self.removeEditOverlay(commentElement);
+                    }
+                };
+                
+                input.addEventListener('keypress', handleKey);
+                input.addEventListener('keydown', handleKey);
+                input.addEventListener('input', function(e) {
+                    console.log('Input changed to:', e.target.value);
+                });
+                input.addEventListener('click', function() {
+                    console.log('Input clicked');
+                });
+                
+                // Temporarily disable blur handler to debug
+                // input.addEventListener('blur', function() {
+                //     console.log('Input lost focus');
+                //     self.removeEditOverlay(commentElement);
+                // });
+                
+                // Add input to overlay and overlay to comment
+                overlay.appendChild(input);
+                commentElement.style.position = 'relative';
+                commentElement.appendChild(overlay);
+                
+                console.log('Overlay created and added to DOM');
+                console.log('Input element:', input);
+                
+                // Focus the input after a short delay
+                setTimeout(() => {
+                    input.focus();
+                    input.select();
+                    console.log('Input focused and selected. Value:', input.value);
+                    console.log('Input has focus:', document.activeElement === input);
+                }, 50);
+            }
+
+            removeEditOverlay(commentElement) {
+                const overlay = commentElement.querySelector('.archetype-edit-overlay');
+                if (overlay) {
+                    overlay.remove();
+                }
+            }
+
+            async refreshAllArchetypalCommentary() {
+                // Refresh all visible archetypal commentary to sync with server state
+                const messages = document.querySelectorAll('.message.show-commentary');
+                for (const message of messages) {
+                    const messageId = message.dataset.messageId;
+                    const originalText = message.dataset.originalText;
+                    const commentaryDiv = document.getElementById(`archetypal-${messageId}`);
+                    
+                    if (commentaryDiv && commentaryDiv.style.display !== 'none') {
+                        console.log(`Refreshing archetypal commentary for message ${messageId}`);
+                        
+                        try {
+                            // Get fresh commentary with current archetypes
+                            const response = await fetch('/api/archetypal-commentary', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ text: originalText })
+                            });
+                            
+                            const commentary = await response.json();
+                            
+                            // Update display
+                            let html = '<div style="font-weight: bold; margin-bottom: 10px; color: #333;">🎭 Archetypal Commentary:</div>';
+                            
+                            for (const [archetype, comment] of Object.entries(commentary)) {
+                                html += `
+                                    <div class="archetype-comment" onclick="window.erisApp.toggleArchetypeEdit(this, '${archetype}', '${messageId}')">
+                                        <div class="archetype-name">${archetype}:</div>
+                                        <div class="archetype-text">"${comment}"</div>
+                                    </div>
+                                `;
+                            }
+                            
+                            commentaryDiv.innerHTML = html;
+                            
+                        } catch (error) {
+                            console.error(`Failed to refresh commentary for message ${messageId}:`, error);
+                        }
+                    }
+                }
+            }
+
+            async saveArchetype(newArchetype, commentElement, originalArchetype, originalCommentary, messageId) {
+                // Remove overlay first
+                this.removeEditOverlay(commentElement);
+                
+                console.log(`Saving archetype: "${originalArchetype}" -> "${newArchetype}"`);
+                
+                try {
+                    // Show loading state by temporarily updating the name
+                    const nameDiv = commentElement.querySelector('.archetype-name');
+                    const originalName = nameDiv.textContent;
+                    nameDiv.textContent = 'Updating...';
+                    
+                    // Get current archetypes from server first
+                    console.log('Fetching current archetypes from server...');
+                    console.log(`User wants to change: "${originalArchetype}" -> "${newArchetype}"`);
+                    
+                    const currentArchetypesResponse = await fetch('/api/archetypes');
+                    if (!currentArchetypesResponse.ok) {
+                        throw new Error(`Failed to get current archetypes: ${currentArchetypesResponse.status}`);
+                    }
+                    const currentArchetypes = await currentArchetypesResponse.json();
+                    console.log('Current archetypes from server:', currentArchetypes);
+                    
+                    // Update the specific archetype
+                    const archetypeIndex = currentArchetypes.findIndex(a => a === originalArchetype);
+                    console.log(`Looking for "${originalArchetype}" in current list, found at index:`, archetypeIndex);
+                    
+                    if (archetypeIndex !== -1) {
+                        console.log(`Replacing "${currentArchetypes[archetypeIndex]}" with "${newArchetype}"`);
+                        currentArchetypes[archetypeIndex] = newArchetype;
+                    } else {
+                        console.warn(`Original archetype "${originalArchetype}" not found in current list: [${currentArchetypes.join(', ')}]`);
+                        console.warn(`This suggests UI is out of sync with server. Finding best match...`);
+                        
+                        // Try to find a reasonable replacement
+                        if (currentArchetypes.includes('Donald Trump') && !currentArchetypes.includes('Einstein')) {
+                            const trumpIndex = currentArchetypes.findIndex(a => a === 'Donald Trump');
+                            console.log(`Replacing Donald Trump (index ${trumpIndex}) with ${newArchetype} as fallback`);
+                            currentArchetypes[trumpIndex] = newArchetype;
+                        } else {
+                            console.log(`Replacing first archetype "${currentArchetypes[0]}" with "${newArchetype}" as last resort`);
+                            currentArchetypes[0] = newArchetype;
+                        }
+                    }
+                    
+                    console.log('Updated archetypes list:', currentArchetypes);
+                    
+                    // Update archetypes via PUT
+                    const putResponse = await fetch('/api/archetypes', {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ archetypes: currentArchetypes })
+                    });
+                    
+                    if (!putResponse.ok) {
+                        throw new Error(`PUT request failed: ${putResponse.status}`);
+                    }
+                    
+                    console.log('Fetching commentary for:', newArchetype);
+                    
+                    // Get new commentary for this archetype
+                    const response = await fetch(`/api/archetypes/${encodeURIComponent(newArchetype)}`);
+                    
+                    if (!response.ok) {
+                        throw new Error(`GET request failed: ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                    console.log('Received commentary:', data);
+                    
+                    // Update the comment with new archetype and commentary
+                    commentElement.innerHTML = `
+                        <div class="archetype-name">${newArchetype}:</div>
+                        <div class="archetype-text">"${data.commentary}"</div>
+                    `;
+                    
+                    // Re-add click handler with updated archetype
+                    commentElement.onclick = () => this.toggleArchetypeEdit(commentElement, newArchetype, messageId);
+                    
+                    console.log('Archetype update completed successfully');
+                    
+                    // Note: Other messages will use updated archetypes when toggled next time
+                    // No need to refresh all messages immediately to avoid excessive API calls
+                    
+                } catch (error) {
+                    console.error('Failed to update archetype:', error);
+                    console.error('Error details:', error.message);
+                    
+                    // Restore original on error
+                    commentElement.innerHTML = `
+                        <div class="archetype-name">${originalArchetype}:</div>
+                        <div class="archetype-text">"${originalCommentary}"</div>
+                    `;
+                    commentElement.onclick = () => this.toggleArchetypeEdit(commentElement, originalArchetype, messageId);
+                    
+                    // Show user-friendly error message
+                    alert(`Failed to update archetype: ${error.message}`);
+                }
+            }
         }
 
         // Initialize
+        console.log('Initializing ErisController');
         const app = new ErisController();
         
         // Make app globally accessible for onclick handlers
         window.erisApp = app;
+        console.log('ErisController initialized and made global:', window.erisApp);
+
+
     </script>
 </body>
 </html>

@@ -11,6 +11,9 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY || 'your-api-key-here'
 });
 
+// Store current archetypes in memory (in production, use database)
+let currentArchetypes = ['Rick Sanchez', 'Elle Woods', 'Donald Trump'];
+
 // Middleware
 app.use(express.json());
 app.use(express.static('.'));  // Serve static files from current directory
@@ -59,7 +62,16 @@ Respond only with the JSON object.`;
     // Parse the JSON response
     let parsedResponse;
     try {
-      parsedResponse = JSON.parse(response);
+      // Clean the response - remove markdown code blocks if present
+      let cleanedResponse = response.trim();
+      if (cleanedResponse.startsWith('```json')) {
+        cleanedResponse = cleanedResponse.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+      } else if (cleanedResponse.startsWith('```')) {
+        cleanedResponse = cleanedResponse.replace(/^```\s*/, '').replace(/\s*```$/, '');
+      }
+      
+      parsedResponse = JSON.parse(cleanedResponse);
+      console.log('Successfully parsed archetypal commentary');
     } catch (parseError) {
       console.error('Failed to parse archetypal commentary as JSON:', response);
       // Fallback response
@@ -184,33 +196,101 @@ app.post('/api/analyze', async (req, res) => {
 
 // Archetypes endpoint
 app.get('/api/archetypes', (req, res) => {
-  const defaultArchetypes = [
-    "Rick Sanchez",
-    "Elle Woods", 
-    "Donald Trump"
-  ];
-  
-  res.json(defaultArchetypes);
+  console.log('GET /api/archetypes - returning current archetypes:', currentArchetypes);
+  res.json(currentArchetypes);
+});
+
+// Update archetypes endpoint
+app.put('/api/archetypes', (req, res) => {
+  try {
+    const { archetypes } = req.body;
+    
+    if (!archetypes || !Array.isArray(archetypes) || archetypes.length !== 3) {
+      return res.status(400).json({ error: 'Must provide exactly 3 archetypes' });
+    }
+    
+    // Actually store the updated archetypes
+    currentArchetypes = [...archetypes];
+    console.log('Updated archetypes:', currentArchetypes);
+    
+    res.json({ message: 'Archetypes updated successfully', archetypes: currentArchetypes });
+    
+  } catch (error) {
+    console.error('Update archetypes error:', error);
+    res.status(500).json({ error: 'Failed to update archetypes' });
+  }
+});
+
+// Get single archetype commentary endpoint
+app.get('/api/archetypes/:archetype', async (req, res) => {
+  try {
+    const { archetype } = req.params;
+    
+    console.log(`Getting commentary for archetype: ${archetype}`);
+    
+    // Mock responses for known archetypes
+    const archetypeCommentaries = {
+      'Rick Sanchez': "*burp* Oh great, more poetry. Look, your words are just neurons firing in patterns, but hey, at least you're trying to make meaning in this meaningless universe. The divine weeping? That's just anthropomorphizing cosmic indifference, Morty!",
+      'Elle Woods': "This is like, totally deep! The way you describe love as this cosmic force - it reminds me of my constitutional law professor who said that justice, like love, requires both passion and precision. Your words have this amazing energy that would totally work in a closing argument!",
+      'Donald Trump': "This is beautiful poetry, really beautiful. Some people say it's the most beautiful poetry they've ever seen. The way you talk about love and the universe - it's tremendous, just tremendous. Not everyone can write like this, believe me.",
+      'Marcus Aurelius': "While you speak of love as the axis around which all existence turns, remember that our task is not to be swept away by such cosmic dances, but to align our will with reason and accept what is beyond our control with equanimity. The divine may weep for humanity's follies, yet we must focus on what lies within our power—our judgments, our virtue, and our duty to the common good.",
+      'Shakespeare': "Ah, what light through yonder window breaks? 'Tis love itself, and the heart is the sun! Yet mark me well—love's labours are not lost when tempered with wisdom's gentle hand.",
+      'Buddha': "In your words, I perceive the attachment that brings both joy and suffering. Love, like all phenomena, is impermanent. Find peace in this truth, for in accepting impermanence, we discover the eternal.",
+      'Yoda': "Strong with love, this text is. But remember, young one—attachment leads to suffering. Love without possessing, you must. The way of the Force, this is."
+    };
+    
+    // If we have a predefined response, use it
+    if (archetypeCommentaries[archetype]) {
+      res.json({ commentary: archetypeCommentaries[archetype] });
+      return;
+    }
+    
+    // For new archetypes, generate dynamic commentary using OpenAI
+    try {
+      const prompt = `You are ${archetype}. Someone has shared this text with you: "Love is the axis around which all existence turns. We are celestial bodies in orbit around something both tender and terrible. The divine weeps for us, knowing we mistake the dance for the destination."
+
+Respond as ${archetype} would, staying true to their character, personality, speaking style, and worldview. Keep the response to 2-3 sentences maximum.`;
+      
+      const completion = await openai.chat.completions.create({
+        model: "gpt-3.5-turbo",
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 150,
+        temperature: 0.8
+      });
+      
+      const commentary = completion.choices[0].message.content.trim();
+      res.json({ commentary });
+      
+    } catch (openaiError) {
+      console.error('OpenAI error for dynamic archetype:', openaiError);
+      // Fallback for OpenAI errors
+      const fallbackCommentary = `${archetype} would offer their unique perspective on these words, drawing from their distinctive worldview and experience. Their voice would add depth to understanding this text through their particular lens of wisdom and experience.`;
+      res.json({ commentary: fallbackCommentary });
+    }
+    
+  } catch (error) {
+    console.error('Get archetype commentary error:', error);
+    res.status(500).json({ error: 'Failed to get archetype commentary' });
+  }
 });
 
 // Archetypal commentary endpoint
 app.post('/api/archetypal-commentary', async (req, res) => {
   try {
-    const { text, archetypes } = req.body;
+    const { text } = req.body;
     
     if (!text || text.trim().length < 3) {
       return res.status(400).json({ error: 'Text too short' });
     }
-    
-    if (!archetypes || !Array.isArray(archetypes) || archetypes.length === 0) {
-      return res.status(400).json({ error: 'Archetypes array required' });
-    }
+
+    // Use current stored archetypes instead of passed ones
+    const archetypesToUse = currentArchetypes;
 
     // Log for debugging
     console.log(`Getting archetypal commentary for: "${text}"`);
-    console.log(`Archetypes: ${archetypes.join(', ')}`);
+    console.log(`Using current archetypes: ${archetypesToUse.join(', ')}`);
     
-    const commentary = await getArchetypalCommentary(text, archetypes);
+    const commentary = await getArchetypalCommentary(text, archetypesToUse);
     
     res.json(commentary);
     
