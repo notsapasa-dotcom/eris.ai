@@ -18,8 +18,35 @@
             background: white;
             color: #333;
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: var(--left-width, 1fr) 4px 1fr;
             gap: 0;
+        }
+
+        .splitter {
+            background: #eee;
+            cursor: col-resize;
+            position: relative;
+            transition: background-color 0.2s ease;
+        }
+
+        .splitter:hover {
+            background: #ddd;
+        }
+
+        .splitter::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 2px;
+            height: 20px;
+            background: #999;
+            border-radius: 1px;
+        }
+
+        .splitter.dragging {
+            background: #ccc;
         }
 
         .input-section {
@@ -241,6 +268,8 @@ And yet, curious as ever, we peered from heaven and gasped.</textarea>
             <div id="loading-indicator" class="loading-indicator hidden">✨ Eris is sensing...</div>
         </div>
     </div>
+
+    <div class="splitter" id="splitter"></div>
 
     <div class="response">
         <div id="output">Select some text and click analyze...</div>
@@ -695,9 +724,70 @@ And yet, curious as ever, we peered from heaven and gasped.</textarea>
             }
         }
 
+        // Draggable Splitter Functionality
+        class ResizableSplitter {
+            constructor() {
+                this.splitter = document.getElementById('splitter');
+                this.isDragging = false;
+                this.startX = 0;
+                this.startLeftWidth = 0;
+                
+                this.init();
+            }
+            
+            init() {
+                this.splitter.addEventListener('mousedown', (e) => this.startDrag(e));
+                document.addEventListener('mousemove', (e) => this.drag(e));
+                document.addEventListener('mouseup', () => this.stopDrag());
+                
+                // Prevent text selection during drag
+                this.splitter.addEventListener('selectstart', (e) => e.preventDefault());
+            }
+            
+            startDrag(e) {
+                this.isDragging = true;
+                this.startX = e.clientX;
+                this.startLeftWidth = document.querySelector('.input-section').offsetWidth;
+                this.splitter.classList.add('dragging');
+                document.body.style.cursor = 'col-resize';
+                document.body.style.userSelect = 'none';
+            }
+            
+            drag(e) {
+                if (!this.isDragging) return;
+                
+                const deltaX = e.clientX - this.startX;
+                const newLeftWidth = this.startLeftWidth + deltaX;
+                const totalWidth = window.innerWidth;
+                const minWidth = 300; // Minimum width for each panel
+                const maxWidth = totalWidth - minWidth - 4; // Account for splitter width
+                
+                // Constrain the width
+                const constrainedWidth = Math.max(minWidth, Math.min(maxWidth, newLeftWidth));
+                const leftPercent = (constrainedWidth / totalWidth) * 100;
+                const rightPercent = ((totalWidth - constrainedWidth - 4) / totalWidth) * 100;
+                
+                // Update CSS custom property
+                document.documentElement.style.setProperty('--left-width', `${leftPercent}%`);
+                document.documentElement.style.setProperty('--right-width', `${rightPercent}%`);
+            }
+            
+            stopDrag() {
+                if (!this.isDragging) return;
+                
+                this.isDragging = false;
+                this.splitter.classList.remove('dragging');
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+            }
+        }
+
         // Initialize
         console.log('Initializing ErisController');
         const app = new ErisController();
+        
+        // Initialize splitter
+        const splitter = new ResizableSplitter();
         
         // Make app globally accessible for onclick handlers
         window.erisApp = app;
